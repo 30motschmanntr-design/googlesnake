@@ -1,4 +1,3 @@
-# Improved Google Snake Mods HTML with block detection
 html = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -54,42 +53,40 @@ html = r"""<!DOCTYPE html>
   </div>
 
 <script>
-const urls = {
-  mod: "https://googlesnakemods.com/",
-  normal: "https://nintendoboi222.github.io/games/Google-snake/"
-};
+const urls = { mod:"https://googlesnakemods.com/", normal:"https://nintendoboi222.github.io/games/Google-snake/" };
 const securlyIndicators = ["securly","blocked","filter","schoolwebfilter","blockedpage"];
 const frame = document.getElementById('snakeFrame');
 const overlay = document.getElementById('overlay');
 const triesLeftEl = document.getElementById('triesLeft');
-let maxRetries = 3, retries = 0, lastUrl = urls.mod, autoRetryTimer = null;
+let maxRetries=3, retries=0, lastUrl=urls.mod, autoRetryTimer=null;
 
+// --- Overlay Functions ---
 function showOverlay(title,msg){
-  document.getElementById('overlayTitle').textContent = title;
-  document.getElementById('overlayMsg').textContent = msg;
-  triesLeftEl.textContent = Math.max(0,maxRetries-retries);
-  overlay.classList.add('visible');
-  overlay.setAttribute('aria-hidden','false');
+  document.getElementById('overlayTitle').textContent=title;
+  document.getElementById('overlayMsg').textContent=msg;
+  triesLeftEl.textContent=Math.max(0,maxRetries-retries);
+  overlay.classList.add('visible'); overlay.setAttribute('aria-hidden','false');
 }
 function hideOverlay(){ overlay.classList.remove('visible'); overlay.setAttribute('aria-hidden','true'); }
 
+// --- Reload iframe ---
 function reloadFrame(url){ 
   const sep = url.includes('?') ? '&' : '?';
   frame.src = url + sep + '_cb=' + Date.now(); 
   lastUrl = url;
 }
 
-function detectBlocked(){
+// --- Detection ---
+function detectBlocked(contentDoc){
   try{
-    const doc = frame.contentDocument || frame.contentWindow.document;
-    const title = (doc.title||"").toLowerCase();
-    const href = (frame.contentWindow.location.href||"").toLowerCase();
-    const bodyText = doc.body ? doc.body.innerText.toLowerCase().slice(0,1000) : "";
-    return securlyIndicators.some(s => title.includes(s) || href.includes(s) || bodyText.includes(s));
-  }catch(e){ return false; } // cross-origin
+    const title = (contentDoc.title||"").toLowerCase();
+    const bodyText = contentDoc.body ? contentDoc.body.innerText.toLowerCase().slice(0,1000) : "";
+    return securlyIndicators.some(s => title.includes(s) || bodyText.includes(s));
+  }catch(e){ return false; }
 }
 
-function handleBlock(){
+// --- Handle iframe block ---
+function handleIframeBlock(){
   retries++;
   if(retries<=maxRetries){
     showOverlay("Network filter detected","Iframe blocked. Retrying automatically...");
@@ -99,18 +96,30 @@ function handleBlock(){
   }
 }
 
-// iframe load detection
+// --- Handle whole-page block ---
+function handlePageBlock(){
+  retries++;
+  if(retries<=maxRetries){
+    showOverlay("Page blocked","Detected that the entire page is blocked. Reloading...");
+    autoRetryTimer=setTimeout(()=>location.reload(),1500+retries*1000);
+  }else{
+    showOverlay("Page blocked permanently","Reloads didn't work. Open site in new tab.");
+  }
+}
+
+// --- iframe load detection ---
 frame.addEventListener('load',()=>{
   if(autoRetryTimer){ clearTimeout(autoRetryTimer); autoRetryTimer=null; }
-  if(detectBlocked()){ handleBlock(); } else { hideOverlay(); retries=0; }
+  if(detectBlocked(frame.contentDocument || frame.contentWindow.document)){ handleIframeBlock(); }
+  else{ hideOverlay(); retries=0; }
 });
 
-// periodic fallback check
-setTimeout(()=>{
-  if(detectBlocked()){ handleBlock(); }
-},5000);
+// --- Periodic page check (every 3s) ---
+setInterval(()=>{
+  if(detectBlocked(document)){ handlePageBlock(); }
+},3000);
 
-// Button actions
+// --- Button actions ---
 document.getElementById('modBtn').onclick=()=>{ retries=0; reloadFrame(urls.mod); };
 document.getElementById('normalBtn').onclick=()=>{ retries=0; reloadFrame(urls.normal); };
 document.getElementById('fullBtn').onclick=()=>{ 
