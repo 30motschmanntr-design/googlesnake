@@ -1,0 +1,135 @@
+# Improved Google Snake Mods HTML with block detection
+html = r"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Google Snake — Mods (with block detection)</title>
+<style>
+  body{font-family:Inter,Arial,Helvetica,sans-serif;margin:0;padding:18px;background:#f6f7fb;color:#111;display:flex;flex-direction:column;align-items:center;gap:12px;}
+  .top{width:100%;max-width:1100px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;}
+  h1{margin:0;font-size:22px;letter-spacing:1px;}
+  .controls{display:flex;gap:10px;flex-wrap:wrap;}
+  button{padding:10px 16px;border-radius:8px;border:none;cursor:pointer;font-weight:600;transition:all 0.2s;}
+  button:hover{opacity:0.9;transform:scale(1.02);}
+  button.primary{background:#0b63d6;color:#fff;}
+  button.secondary{background:#6c757d;color:#fff;}
+  iframe{width:100%;height:720px;border:0;border-radius:8px;box-shadow:0 6px 18px rgba(20,20,40,0.08);transition:all 0.2s;}
+  iframe:focus{outline:none;}
+  .note{font-size:13px;color:#444;max-width:1100px;}
+  .overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.45);visibility:hidden;opacity:0;transition:opacity .2s;}
+  .overlay.visible{visibility:visible;opacity:1;}
+  .overlay .card{background:#fff;padding:20px;border-radius:12px;max-width:600px;width:90%;box-shadow:0 12px 40px rgba(10,10,30,0.2);text-align:left;}
+  .muted{color:#666;font-size:13px;margin-top:8px;}
+  .tries{font-weight:700;margin-left:6px;}
+  @media(max-width:720px){ iframe{height:520px;} }
+</style>
+</head>
+<body>
+  <div class="top">
+    <h1>Google Snake — Mods (with block detection)</h1>
+    <div class="controls">
+      <button id="modBtn" class="primary">Play Modded Snake</button>
+      <button id="normalBtn" class="secondary">Play Normal Snake</button>
+      <button id="fullBtn" class="secondary">Go Fullscreen</button>
+    </div>
+  </div>
+
+  <p class="note">If the mod site doesn't load due to network restrictions, this page will detect it and retry automatically. If still blocked, you'll have options to open it directly.</p>
+
+  <iframe id="snakeFrame" src="https://googlesnakemods.com/" allowfullscreen sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
+
+  <div id="overlay" class="overlay" role="dialog" aria-hidden="true">
+    <div class="card">
+      <h3 id="overlayTitle">Connection blocked</h3>
+      <p id="overlayMsg">The page appears blocked. Retrying automatically...</p>
+      <p class="muted">Automatic retries left: <span id="triesLeft" class="tries">3</span></p>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button id="retryBtn" class="primary">Retry Now</button>
+        <button id="openTabBtn" class="secondary">Open in new tab</button>
+        <button id="closeBtn" class="secondary">Close</button>
+      </div>
+      <p class="muted" style="margin-top:8px;">Note: I won't bypass network filters. If blocked, use a permitted network/device.</p>
+    </div>
+  </div>
+
+<script>
+const urls = {
+  mod: "https://googlesnakemods.com/",
+  normal: "https://nintendoboi222.github.io/games/Google-snake/"
+};
+const securlyIndicators = ["securly","blocked","filter","schoolwebfilter","blockedpage"];
+const frame = document.getElementById('snakeFrame');
+const overlay = document.getElementById('overlay');
+const triesLeftEl = document.getElementById('triesLeft');
+let maxRetries = 3, retries = 0, lastUrl = urls.mod, autoRetryTimer = null;
+
+function showOverlay(title,msg){
+  document.getElementById('overlayTitle').textContent = title;
+  document.getElementById('overlayMsg').textContent = msg;
+  triesLeftEl.textContent = Math.max(0,maxRetries-retries);
+  overlay.classList.add('visible');
+  overlay.setAttribute('aria-hidden','false');
+}
+function hideOverlay(){ overlay.classList.remove('visible'); overlay.setAttribute('aria-hidden','true'); }
+
+function reloadFrame(url){ 
+  const sep = url.includes('?') ? '&' : '?';
+  frame.src = url + sep + '_cb=' + Date.now(); 
+  lastUrl = url;
+}
+
+function detectBlocked(){
+  try{
+    const doc = frame.contentDocument || frame.contentWindow.document;
+    const title = (doc.title||"").toLowerCase();
+    const href = (frame.contentWindow.location.href||"").toLowerCase();
+    const bodyText = doc.body ? doc.body.innerText.toLowerCase().slice(0,1000) : "";
+    return securlyIndicators.some(s => title.includes(s) || href.includes(s) || bodyText.includes(s));
+  }catch(e){ return false; } // cross-origin
+}
+
+function handleBlock(){
+  retries++;
+  if(retries<=maxRetries){
+    showOverlay("Network filter detected","Iframe blocked. Retrying automatically...");
+    autoRetryTimer=setTimeout(()=>reloadFrame(lastUrl),1800+retries*1200);
+  }else{
+    showOverlay("Still blocked","Multiple retries failed. Open site in a new tab.");
+  }
+}
+
+// iframe load detection
+frame.addEventListener('load',()=>{
+  if(autoRetryTimer){ clearTimeout(autoRetryTimer); autoRetryTimer=null; }
+  if(detectBlocked()){ handleBlock(); } else { hideOverlay(); retries=0; }
+});
+
+// periodic fallback check
+setTimeout(()=>{
+  if(detectBlocked()){ handleBlock(); }
+},5000);
+
+// Button actions
+document.getElementById('modBtn').onclick=()=>{ retries=0; reloadFrame(urls.mod); };
+document.getElementById('normalBtn').onclick=()=>{ retries=0; reloadFrame(urls.normal); };
+document.getElementById('fullBtn').onclick=()=>{ 
+  if(frame.requestFullscreen) frame.requestFullscreen();
+  else if(frame.webkitRequestFullscreen) frame.webkitRequestFullscreen();
+  else if(frame.mozRequestFullScreen) frame.mozRequestFullScreen();
+};
+document.getElementById('retryBtn').onclick=()=>{ retries=Math.max(0,retries-1); triesLeftEl.textContent=Math.max(0,maxRetries-retries); hideOverlay(); reloadFrame(lastUrl); };
+document.getElementById('openTabBtn').onclick=()=>{ window.open(lastUrl,'_blank','noopener'); };
+document.getElementById('closeBtn').onclick=()=>{ hideOverlay(); };
+
+// pause retries on tab switch
+document.addEventListener('visibilitychange',()=>{ if(document.hidden && autoRetryTimer){ clearTimeout(autoRetryTimer); autoRetryTimer=null; } });
+</script>
+</body>
+</html>
+"""
+
+path = "/mnt/data/GoogleSnakeMods_blockdetect.html"
+with open(path, "w", encoding="utf-8") as f:
+    f.write(html)
+print("Created file at:", path)
